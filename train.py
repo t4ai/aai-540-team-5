@@ -28,13 +28,6 @@ def parse_args():
 
     return parser.parse_known_args()
 
-def get_normalization_statistics(train_dir):
-
-    global_mean = np.load(os.path.join(train_dir, 'global_mean.npy'))
-    global_stddev = np.load(os.path.join(train_dir, 'global_stddev.npy'))
-    print('global_mean', global_mean,'global_stddev', global_stddev)
-
-    return global_mean, global_stddev
 
 def get_train_data(train_dir):
 
@@ -85,7 +78,7 @@ def get_val_data(val_dir):
 
     return continuous_val_inputs, categorical_val_inputs, val_targets
 
-def create_model(norm_mean, norm_stddev, units, noise, l2_regularization, dropout,
+def create_model(units, noise, l2_regularization, dropout,
                 continuous_input_shape, categorical_input_shape, target_shape):
     continuous_input = Input(
         shape=continuous_input_shape, 
@@ -97,22 +90,15 @@ def create_model(norm_mean, norm_stddev, units, noise, l2_regularization, dropou
         name="categorical_input"
     )
 
-    global_mean_tf = tf.constant(norm_mean, dtype=tf.float32)
-    global_stddev_tf = tf.constant(norm_stddev, dtype=tf.float32)
-    target_mean_tf = tf.constant(norm_mean[0], dtype=tf.float32)
-    target_stddev_tf = tf.constant(norm_stddev[0], dtype=tf.float32)
-
-    normalized_input = Lambda(lambda x: (x - global_mean_tf) / global_stddev_tf)(continuous_input)
-    noisy_input = GaussianNoise(stddev=noise)(normalized_input)
+    noisy_input = GaussianNoise(stddev=noise)(continuous_input)
     combined_inputs = Concatenate(axis=-1)([noisy_input, categorical_input])
     reshaped = Reshape(target_shape=(-1, combined_inputs.shape[3]))(combined_inputs)
     gru = GRU(units, kernel_regularizer=tf.keras.regularizers.l2(l2_regularization))(reshaped)
     dropout = Dropout(dropout)(gru)
     dense = Dense(target_shape[0]*target_shape[1])(dropout)
     outputs = Reshape(target_shape=target_shape)(dense)
-    denormalized_outputs = Lambda(lambda x: x * target_stddev_tf + target_mean_tf)(outputs)
 
-    return Model(inputs=[continuous_input, categorical_input], outputs=denormalized_outputs)
+    return Model(inputs=[continuous_input, categorical_input], outputs=outputs)
     
 if __name__ == "__main__":
 
@@ -124,10 +110,6 @@ if __name__ == "__main__":
     continuous_train_inputs, categorical_train_inputs, train_targets = get_train_data(args.train)
     continuous_test_inputs, categorical_test_inputs, test_targets = get_test_data(args.test)
     continuous_val_inputs, categorical_val_inputs, val_targets = get_val_data(args.validation)
-    
-    global_mean, global_stddev = get_normalization_statistics(args.train)
-    global_mean_list = global_mean.tolist()
-    global_stddev_list = global_stddev.tolist()
 
     batch_size = args.batch_size
     epochs = args.epochs
@@ -140,21 +122,25 @@ if __name__ == "__main__":
           .format(batch_size, epochs, learning_rate, units, noise, l2_regularization, dropout))
     
     
-    model = create_model(global_mean_list, global_stddev_list, units, noise, l2_regularization, dropout,
+    model = create_model(units, noise, l2_regularization, dropout,
                         continuous_input_shape=continuous_train_inputs.shape[1:],
                         categorical_input_shape=categorical_train_inputs.shape[1:],
                         target_shape=train_targets.shape[1:]
     )
     
-    model.compile(loss='mean_squared_error', metrics=['mean_absolute_error'], optimizer=tf.keras.optimizers.Adam(learning_rate))
+    model.compile(
+        loss='mean_squared_error', 
+        metrics=[tf.keras.metrics.RootMeanSquaredError(), 'mean_absolute_error'], 
+        optimizer=tf.keras.optimizers.Adam(learning_rate)
+    )
 
     print(model.summary())
     
     es_callback = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss",
-        min_delta=10000,
-        patience=6,
-        verbose=0,
+        min_delta=0,
+        patience=4,
+        verbose=1,
         restore_best_weights=True
     )
 
@@ -177,6 +163,6 @@ if __name__ == "__main__":
     # plt.show()
 
     eval = model.evaluate([continuous_val_inputs, categorical_val_inputs], val_targets, verbose=2)
-    print(f"\n Test MSE: {eval[0]} Test MAE: {eval[1]}")
+    print(f"\n Test MSE: {eval[0]} Test RMSE: {eval[1]} Test MAE: {eval[2]}")
     
     model.save(args.sm_model_dir + '/1')
