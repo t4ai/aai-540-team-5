@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Reshape, Normalization, Flatten, Dropout 
 from tensorflow.keras.layers import Concatenate, GaussianNoise, Lambda
-from tensorflow.keras.layers import Dense, LSTM, TimeDistributed, RNN, GRU
+from tensorflow.keras.layers import Dense, LSTM, TimeDistributed, RNN, GRU, Conv1D, MaxPooling1D
 
 def parse_args():
 
@@ -15,7 +15,6 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=0.001)
-    parser.add_argument('--units', type=int, default=8)
     parser.add_argument('--noise', type=float, default=0.1)
     parser.add_argument('--l2_regularization', type=float, default=0.001)
     parser.add_argument('--dropout', type=float, default=0.0)
@@ -78,7 +77,7 @@ def get_val_data(val_dir):
 
     return continuous_val_inputs, categorical_val_inputs, val_targets
 
-def create_model(units, noise, l2_regularization, dropout,
+def create_model(noise, l2_regularization, dropout,
                 continuous_input_shape, categorical_input_shape, target_shape):
     continuous_input = Input(
         shape=continuous_input_shape, 
@@ -93,10 +92,14 @@ def create_model(units, noise, l2_regularization, dropout,
     noisy_input = GaussianNoise(stddev=noise)(continuous_input)
     combined_inputs = Concatenate(axis=-1)([noisy_input, categorical_input])
     reshaped = Reshape(target_shape=(-1, combined_inputs.shape[3]))(combined_inputs)
-    gru = GRU(units, kernel_regularizer=tf.keras.regularizers.l2(l2_regularization))(reshaped)
-    dropout = Dropout(dropout)(gru)
-    dense = Dense(target_shape[0]*target_shape[1])(dropout)
+    conv = Conv1D(filters=32, kernel_size=3, activation='relu', padding='same')(reshaped)
+    pooled = MaxPooling1D(pool_size=2)(conv)
+    dropout1 = Dropout(dropout)(pooled)
+    gru = GRU(8, kernel_regularizer=tf.keras.regularizers.l2(l2_regularization))(dropout1)
+    dropout2 = Dropout(dropout)(gru)
+    dense = Dense(target_shape[0]*target_shape[1])(dropout2)
     outputs = Reshape(target_shape=target_shape)(dense)
+    
 
     return Model(inputs=[continuous_input, categorical_input], outputs=outputs)
     
@@ -114,15 +117,14 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     epochs = args.epochs
     learning_rate = args.learning_rate
-    units = args.units
     noise = args.noise
     l2_regularization = args.l2_regularization
     dropout = args.dropout
-    print('batch_size = {}, epochs = {}, learning rate = {}, units = {}, noise = {}, l2_regularization = {}, dropout = {}'
-          .format(batch_size, epochs, learning_rate, units, noise, l2_regularization, dropout))
+    print('batch_size = {}, epochs = {}, learning rate = {}, noise = {}, l2_regularization = {}, dropout = {}'
+          .format(batch_size, epochs, learning_rate, noise, l2_regularization, dropout))
     
     
-    model = create_model(units, noise, l2_regularization, dropout,
+    model = create_model(noise, l2_regularization, dropout,
                         continuous_input_shape=continuous_train_inputs.shape[1:],
                         categorical_input_shape=categorical_train_inputs.shape[1:],
                         target_shape=train_targets.shape[1:]
