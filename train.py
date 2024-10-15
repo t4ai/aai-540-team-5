@@ -4,18 +4,16 @@ import numpy as np
 import os
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Input, Reshape, Normalization, Flatten, Dropout 
-from tensorflow.keras.layers import Concatenate, GaussianNoise, Lambda
-from tensorflow.keras.layers import Dense, LSTM, TimeDistributed, RNN, GRU, Conv1D, MaxPooling1D
+from tensorflow.keras.layers import Input, Reshape, Normalization, Flatten, Dropout
+from tensorflow.keras.layers import Dense, LSTM, GRU, Conv1D, MaxPooling1D
 
 def parse_args():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=0.001)
-    parser.add_argument('--noise', type=float, default=0.1)
     parser.add_argument('--l2_regularization', type=float, default=0.001)
     parser.add_argument('--dropout', type=float, default=0.0)
 
@@ -29,70 +27,38 @@ def parse_args():
 
 
 def get_train_data(train_dir):
-
-    continuous_train_inputs = np.load(os.path.join(train_dir, 'continuous_train_inputs.npy'))
-    categorical_train_inputs = np.load(os.path.join(train_dir, 'categorical_train_inputs.npy'))
+    
+    train_inputs = np.load(os.path.join(train_dir, 'train_inputs.npy'))
     train_targets = np.load(os.path.join(train_dir, 'train_targets.npy'))
-    print(
-        'continuous_train_inputs:', 
-        continuous_train_inputs.shape, 
-        'categorical_train_inputs:', 
-        categorical_train_inputs.shape,
-        'train_targets:',
-        train_targets.shape
-    )
+    
+    print('train_inputs:', train_inputs.shape, 'train_targets:', train_targets.shape)
 
-    return continuous_train_inputs, categorical_train_inputs, train_targets
+    return train_inputs, train_targets
 
 
 def get_test_data(test_dir):
-
-    continuous_test_inputs = np.load(os.path.join(test_dir, 'continuous_test_inputs.npy'))
-    categorical_test_inputs = np.load(os.path.join(test_dir, 'categorical_test_inputs.npy'))
+    
+    test_inputs = np.load(os.path.join(test_dir, 'test_inputs.npy'))
     test_targets = np.load(os.path.join(test_dir, 'test_targets.npy'))
-    print(
-        'continuous_test_inputs:', 
-        continuous_test_inputs.shape, 
-        'categorical_test_inputs:', 
-        categorical_test_inputs.shape,
-        'test_targets:',
-        test_targets.shape
-    )
+    
+    print('test_inputs:', test_inputs.shape, 'test_targets:', test_targets.shape)
 
-    return continuous_test_inputs, categorical_test_inputs, test_targets
+    return test_inputs, test_targets
 
 def get_val_data(val_dir):
-
-    continuous_val_inputs = np.load(os.path.join(val_dir, 'continuous_val_inputs.npy'))
-    categorical_val_inputs = np.load(os.path.join(val_dir, 'categorical_val_inputs.npy'))
+    
+    val_inputs = np.load(os.path.join(val_dir, 'val_inputs.npy'))
     val_targets = np.load(os.path.join(val_dir, 'val_targets.npy'))
-    print(
-        'continuous_val_inputs:', 
-        continuous_val_inputs.shape, 
-        'categorical_val_inputs:', 
-        categorical_val_inputs.shape,
-        'val_targets:',
-        val_targets.shape
-    )
+    
+    print('val_inputs:', val_inputs.shape, 'val_targets:', val_targets.shape)
 
-    return continuous_val_inputs, categorical_val_inputs, val_targets
+    return val_inputs, val_targets
 
-def create_model(noise, l2_regularization, dropout,
-                continuous_input_shape, categorical_input_shape, target_shape):
-    continuous_input = Input(
-        shape=continuous_input_shape, 
-        name="continuous_input"
-    )
-
-    categorical_input = Input(
-        shape=categorical_input_shape, 
-        name="categorical_input"
-    )
-
-    noisy_input = GaussianNoise(stddev=noise)(continuous_input)
-    combined_inputs = Concatenate(axis=-1)([noisy_input, categorical_input])
-    reshaped = Reshape(target_shape=(-1, combined_inputs.shape[3]))(combined_inputs)
-    conv = Conv1D(filters=32, kernel_size=3, activation='relu', padding='same')(reshaped)
+def create_model(l2_regularization, dropout, input_shape, target_shape):
+    
+    input_layer = Input(shape=input_shape)
+    reshaped_input = Reshape(target_shape=(-1, input_shape[2]))(input_layer)
+    conv = Conv1D(filters=32, kernel_size=3, activation='relu', padding='same')(reshaped_input)
     pooled = MaxPooling1D(pool_size=2)(conv)
     dropout1 = Dropout(dropout)(pooled)
     gru = GRU(8, kernel_regularizer=tf.keras.regularizers.l2(l2_regularization))(dropout1)
@@ -101,7 +67,7 @@ def create_model(noise, l2_regularization, dropout,
     outputs = Reshape(target_shape=target_shape)(dense)
     
 
-    return Model(inputs=[continuous_input, categorical_input], outputs=outputs)
+    return Model(inputs=input_layer, outputs=outputs)
     
 if __name__ == "__main__":
 
@@ -110,24 +76,24 @@ if __name__ == "__main__":
     print('Training data location: {}'.format(args.train))
     print('Test data location: {}'.format(args.test))
     print('Validation data location: {}'.format(args.validation))
-    continuous_train_inputs, categorical_train_inputs, train_targets = get_train_data(args.train)
-    continuous_test_inputs, categorical_test_inputs, test_targets = get_test_data(args.test)
-    continuous_val_inputs, categorical_val_inputs, val_targets = get_val_data(args.validation)
+    train_inputs, train_targets = get_train_data(args.train)
+    test_inputs, test_targets = get_test_data(args.test)
+    val_inputs, val_targets = get_val_data(args.validation)
 
     batch_size = args.batch_size
     epochs = args.epochs
     learning_rate = args.learning_rate
-    noise = args.noise
     l2_regularization = args.l2_regularization
     dropout = args.dropout
-    print('batch_size = {}, epochs = {}, learning rate = {}, noise = {}, l2_regularization = {}, dropout = {}'
-          .format(batch_size, epochs, learning_rate, noise, l2_regularization, dropout))
+    print('batch_size = {}, epochs = {}, learning rate = {}, l2_regularization = {}, dropout = {}'
+          .format(batch_size, epochs, learning_rate, l2_regularization, dropout))
     
     
-    model = create_model(noise, l2_regularization, dropout,
-                        continuous_input_shape=continuous_train_inputs.shape[1:],
-                        categorical_input_shape=categorical_train_inputs.shape[1:],
-                        target_shape=train_targets.shape[1:]
+    model = create_model(
+        l2_regularization, 
+        dropout, 
+        input_shape=train_inputs.shape[1:], 
+        target_shape=train_targets.shape[1:]
     )
     
     model.compile(
@@ -148,23 +114,17 @@ if __name__ == "__main__":
 
 
     history = model.fit(
-        [continuous_train_inputs, categorical_train_inputs], 
+        train_inputs, 
         train_targets, 
-        validation_data=([continuous_test_inputs, categorical_test_inputs], test_targets), 
+        validation_data=(test_inputs, test_targets), 
         epochs=epochs, 
         batch_size=batch_size, 
         callbacks=[es_callback],
         verbose=2
     )
 
-    # plt.plot(history.history['loss'], label='Train Loss')
-    # plt.plot(history.history['val_loss'], label='Validation Loss')
-    # plt.xlabel('Epochs')
-    # plt.ylabel('Loss')
-    # plt.legend()
-    # plt.show()
 
-    eval = model.evaluate([continuous_val_inputs, categorical_val_inputs], val_targets, verbose=2)
+    eval = model.evaluate(val_inputs, val_targets, verbose=2)
     print(f"\n Test MSE: {eval[0]} Test RMSE: {eval[1]} Test MAE: {eval[2]}")
     
     model.save(args.sm_model_dir + '/1')
