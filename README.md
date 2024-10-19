@@ -113,7 +113,9 @@ This project utilizes a range of AWS services and machine learning tools:
 ## Contributors
 
 @t4ai / Tyler Foreman
+
 @julietlawton / Juliet Lawton
+
 @Yoha02 / Eyoha Gir
 
 ## License
