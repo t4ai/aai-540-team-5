@@ -1,3 +1,4 @@
+# Define a script that trains the custom model in AWS script mode
 # Adapted from: https://github.com/aws-samples/amazon-sagemaker-script-mode/blob/master/tf-2-workflow-smpipelines/train_model/train.py
 import argparse
 import numpy as np
@@ -7,6 +8,7 @@ from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Reshape, Normalization, Flatten, Dropout
 from tensorflow.keras.layers import Dense, LSTM, GRU, Conv1D, MaxPooling1D
 
+# Define a function to parse the model arguments
 def parse_args():
 
     parser = argparse.ArgumentParser()
@@ -26,6 +28,7 @@ def parse_args():
     return parser.parse_known_args()
 
 
+# Define a function to load the training data
 def get_train_data(train_dir):
     
     train_inputs = np.load(os.path.join(train_dir, 'train_inputs.npy'))
@@ -36,6 +39,7 @@ def get_train_data(train_dir):
     return train_inputs, train_targets
 
 
+# Define a function to load the test data
 def get_test_data(test_dir):
     
     test_inputs = np.load(os.path.join(test_dir, 'test_inputs.npy'))
@@ -45,6 +49,8 @@ def get_test_data(test_dir):
 
     return test_inputs, test_targets
 
+
+# Define a function to load the validation data
 def get_val_data(val_dir):
     
     val_inputs = np.load(os.path.join(val_dir, 'val_inputs.npy'))
@@ -54,6 +60,8 @@ def get_val_data(val_dir):
 
     return val_inputs, val_targets
 
+
+# Define the model architecture
 def create_model(l2_regularization, dropout, input_shape, target_shape):
     
     input_layer = Input(shape=input_shape)
@@ -71,8 +79,10 @@ def create_model(l2_regularization, dropout, input_shape, target_shape):
     
 if __name__ == "__main__":
 
+    # Parse arguments
     args, _ = parse_args()
  
+    # Load the data
     print('Training data location: {}'.format(args.train))
     print('Test data location: {}'.format(args.test))
     print('Validation data location: {}'.format(args.validation))
@@ -80,6 +90,7 @@ if __name__ == "__main__":
     test_inputs, test_targets = get_test_data(args.test)
     val_inputs, val_targets = get_val_data(args.validation)
 
+    # Set the model training hyperparameters
     batch_size = args.batch_size
     epochs = args.epochs
     learning_rate = args.learning_rate
@@ -88,7 +99,7 @@ if __name__ == "__main__":
     print('batch_size = {}, epochs = {}, learning rate = {}, l2_regularization = {}, dropout = {}'
           .format(batch_size, epochs, learning_rate, l2_regularization, dropout))
     
-    
+    # Instantiate the model
     model = create_model(
         l2_regularization, 
         dropout, 
@@ -96,6 +107,7 @@ if __name__ == "__main__":
         target_shape=train_targets.shape[1:]
     )
     
+    # Compile the model
     model.compile(
         loss='mean_squared_error', 
         metrics=[tf.keras.metrics.RootMeanSquaredError(), 'mean_absolute_error'], 
@@ -104,6 +116,7 @@ if __name__ == "__main__":
 
     print(model.summary())
     
+    # Define an early stopping callback for the model
     es_callback = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss",
         min_delta=0,
@@ -113,6 +126,7 @@ if __name__ == "__main__":
     )
 
 
+    # Train the model
     history = model.fit(
         train_inputs, 
         train_targets, 
@@ -124,7 +138,9 @@ if __name__ == "__main__":
     )
 
 
+    # Evaluate the model on the validation set
     eval = model.evaluate(val_inputs, val_targets, verbose=2)
     print(f"\n Test MSE: {eval[0]} Test RMSE: {eval[1]} Test MAE: {eval[2]}")
     
+    # Save the model
     model.save(args.sm_model_dir + '/1')

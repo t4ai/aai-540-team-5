@@ -1,3 +1,8 @@
+
+# Define a preprocessing script that will run in the pipeline
+# This script will take the data in the feature store, split it, and transform
+# it into the format expected by the model
+
 import json
 import argparse
 import os
@@ -10,6 +15,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+# Select features to use in the model
 def get_store_features(row):
     return [
       row["sales"], 
@@ -34,6 +40,7 @@ def get_store_features(row):
       row["dow_sin"]
 ]
 
+# Split the data sets into input windows and associated targets
 def generate_windows(data, input_seq_length, target_seq_length, stride):
     windows = []
     targets = []
@@ -55,14 +62,18 @@ def generate_windows(data, input_seq_length, target_seq_length, stride):
 
 
 if __name__ == "__main__":
+    
+    # Base directory inside the pipeline
     base_dir = "/opt/ml/processing"
-
+    
+    # Load the data
     df = pd.read_csv(f"{base_dir}/input/input_data.csv", index_col=0)
     
-    # Apply to the whole dataframe
+    # Apply feature selection function
     df["features"] = df.apply(get_store_features, axis=1)
     num_continuous_features = 3
     
+    # Drop uneeded columns
     drop_columns = [col for col in df.columns if col not in ["date", "store_nbr", "features"]]
     df.drop(columns=drop_columns, inplace=True)
     
@@ -77,6 +88,8 @@ if __name__ == "__main__":
     train_data = stacked_df[:, :int(n*0.8), :]
     test_data = stacked_df[:, int(n*0.8):int(n*0.9), :]
     val_data = stacked_df[:, int(n*0.9):-7, :]
+    
+    # Withold the last 7 days of the data for forecasting
     forecast_data = stacked_df[:, -7:, :]
     
     # Get the mean and standard deviation for normalization
@@ -111,6 +124,7 @@ if __name__ == "__main__":
     target_seq_length = 1
     stride = 1
 
+    # Create the input and target windows for the data splits
     train_inputs, train_targets = generate_windows(train_data, input_seq_length, target_seq_length, stride)
     print(f"Train inputs shape: {train_inputs.shape}")
     print(f"Train targets shape: {train_targets.shape}")
@@ -133,6 +147,7 @@ if __name__ == "__main__":
     np.save(f"{base_dir}/validation/val_inputs.npy", val_inputs)
     np.save(f"{base_dir}/validation/val_targets.npy", val_targets)
 
+    # Save the evaluation data for the batch transform evaluation job
     with open(f"{base_dir}/transform-input/validation_data.ndjson", "w") as f:
         for i, window in enumerate(val_inputs):
             instance = {"input_1": window.tolist()}
@@ -142,6 +157,8 @@ if __name__ == "__main__":
             else:
                 f.write(json_line)
     
+    
+    # Save the forecasting data
     with open(f"{base_dir}/forecast-input/forecast_data.ndjson", "w") as f:
         instance = {"input_1": forecast_data.tolist()}
         json_line = json.dumps(instance)
