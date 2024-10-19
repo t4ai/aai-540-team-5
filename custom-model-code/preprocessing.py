@@ -76,7 +76,8 @@ if __name__ == "__main__":
     n = stacked_df.shape[1]
     train_data = stacked_df[:, :int(n*0.8), :]
     test_data = stacked_df[:, int(n*0.8):int(n*0.9), :]
-    val_data = stacked_df[:, int(n*0.9):, :]
+    val_data = stacked_df[:, int(n*0.9):-7, :]
+    forecast_data = stacked_df[:, -7:, :]
     
     # Get the mean and standard deviation for normalization
     scaler = StandardScaler()
@@ -85,21 +86,25 @@ if __name__ == "__main__":
     train_data_2d = train_data.reshape(-1, train_data.shape[2])
     test_data_2d = test_data.reshape(-1, test_data.shape[2])
     val_data_2d = val_data.reshape(-1, val_data.shape[2])
+    forecast_data_2d = forecast_data.reshape(-1, forecast_data.shape[2])
 
     # Scale just the continuous features
     train_data_2d[:, :num_continuous_features] = scaler.fit_transform(train_data_2d[:, :num_continuous_features])
     test_data_2d[:, :num_continuous_features] = scaler.transform(test_data_2d[:, :num_continuous_features])
     val_data_2d[:, :num_continuous_features] = scaler.transform(val_data_2d[:, :num_continuous_features])
+    forecast_data_2d[:, :num_continuous_features] = scaler.transform(forecast_data_2d[:, :num_continuous_features])
 
     # Add Gaussian noise to the continuous features
-    train_data_2d[:, :num_continuous_features] = train_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.3, train_data_2d[:, :num_continuous_features].shape)
-    test_data_2d[:, :num_continuous_features] = test_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.3, test_data_2d[:, :num_continuous_features].shape)
-    val_data_2d[:, :num_continuous_features] = val_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.3, val_data_2d[:, :num_continuous_features].shape)
+    train_data_2d[:, :num_continuous_features] = train_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.2, train_data_2d[:, :num_continuous_features].shape)
+    test_data_2d[:, :num_continuous_features] = test_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.2, test_data_2d[:, :num_continuous_features].shape)
+    val_data_2d[:, :num_continuous_features] = val_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.2, val_data_2d[:, :num_continuous_features].shape)
+    forecast_data_2d[:, :num_continuous_features] = forecast_data_2d[:, :num_continuous_features] + np.random.normal(0, 0.2, forecast_data_2d[:, :num_continuous_features].shape)
 
     # Reshape the data back to its original dimensions
     train_data = train_data_2d.reshape(train_data.shape)
     test_data = test_data_2d.reshape(test_data.shape)
     val_data = val_data_2d.reshape(val_data.shape)
+    forecast_data = forecast_data_2d.reshape(forecast_data.shape)
     
     # Generate windows for train/test/val sets
     input_seq_length = 7
@@ -136,4 +141,9 @@ if __name__ == "__main__":
                 f.write(json_line + "\n")
             else:
                 f.write(json_line)
+    
+    with open(f"{base_dir}/forecast-input/forecast_data.ndjson", "w") as f:
+        instance = {"input_1": forecast_data.tolist()}
+        json_line = json.dumps(instance)
+        f.write(json_line)
 
