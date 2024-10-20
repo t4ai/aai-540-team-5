@@ -4,6 +4,32 @@
 
 This project demonstrates the use of advanced time series forecasting techniques to predict store sales for Favorita stores. It showcases the implementation of both Amazon SageMaker's DeepAR algorithm and a custom deep learning time series model, along with the setup of a CI/CD pipeline in AWS for model deployment and monitoring.
 
+## Data Source
+
+The data used in this project is the [Store Sales Time Series Forecasting](https://www.kaggle.com/code/ekrembayar/store-sales-ts-forecasting-a-comprehensive-guide#11.-Exponential-Moving-Average) dataset from Kaggle. The data was stored in S3 and contained the following files:
+
+#### train.csv
+
+The training data, comprising time series of features store_nbr and onpromotion as well as the target sales.
+
+store_nbr identifies the store at which the products are sold.
+
+sales gives the total sales for a product family at a particular store at a given date. Fractional values are possible since products can be sold in fractional units (1.5 kg of cheese, for instance, as opposed to 1 bag of chips).
+
+onpromotion gives the total number of items in a product family that were being promoted at a store at a given date.
+
+#### stores.csv
+
+Store metadata, including city, state, type, and cluster (cluster is a grouping of similar stores).
+
+#### oil.csv
+
+Daily oil price. Includes values during both the train and test data timeframes. (Ecuador is an oil-dependent country and it's economical health is highly vulnerable to shocks in oil prices.)
+
+#### holidays_events.csv
+
+Holidays and Events, with metadata.
+
 ## Table of Contents
 
 1. [Environment Setup](#environment-setup)
@@ -114,7 +140,7 @@ This project utilizes a range of AWS services and machine learning tools:
 
 @t4ai / Tyler Foreman
 
-@julietlawton / Juliet Lawton
+@julietlawton / Juliet Lawton (commits from "root" are also Juliet)
 
 @Yoha02 / Eyoha Gir
 
